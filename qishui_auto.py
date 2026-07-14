@@ -32,7 +32,7 @@ CENTER_TARGETS = {"领取奖励", "继续观看"}
 # 截图过大时缩小再 OCR，加快速度（坐标会按比例还原）
 OCR_MAX_WIDTH = 720
 # 每次点击保存标注截图，方便排查误点
-SAVE_CLICK_DEBUG = False
+SAVE_CLICK_DEBUG = True
 # ===========================================
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
