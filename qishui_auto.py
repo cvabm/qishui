@@ -18,6 +18,14 @@ OCR_SCORE = 0.5
 FUZZY = True
 POLL_INTERVAL = 1.2
 CLICK_COOLDOWN = 2.0
+# 跳进直播间时自动点右上角关闭。关闭位置用屏幕比例，适配不同分辨率。
+ENABLE_LIVE_EXIT = True
+LIVE_ACTIVITY_KEYWORDS = [
+    "LunaDefaultLivePlayerActivity",
+    "live",
+]
+LIVE_EXIT_POS = (0.94, 0.06)
+LIVE_EXIT_COOLDOWN = 2.0
 # 未命中时是否随机上滑（默认关，避免误滑干扰排查）
 ENABLE_RANDOM_SWIPE = False
 SWIPE_PROB = 0.12
@@ -54,6 +62,43 @@ def adb_command(cmd):
     return subprocess.run(["adb"] + cmd, capture_output=True, text=True)
 
 
+def get_current_activity():
+    result = adb_command(["shell", "dumpsys", "window"])
+    if result.returncode != 0:
+        return ""
+    for line in result.stdout.splitlines():
+        if "mCurrentFocus" not in line:
+            continue
+        match = re.search(r"u0\s+([^}\s]+)", line)
+        if match:
+            return match.group(1)
+    return ""
+
+
+def is_live_activity(activity: str) -> bool:
+    if not activity:
+        return False
+    lower = activity.lower()
+    return any(keyword.lower() in lower for keyword in LIVE_ACTIVITY_KEYWORDS)
+
+
+def exit_live_room(screen):
+    if not ENABLE_LIVE_EXIT:
+        return False
+
+    activity = get_current_activity()
+    if not is_live_activity(activity):
+        return False
+
+    h, w = screen.shape[:2]
+    x = int(w * LIVE_EXIT_POS[0])
+    y = int(h * LIVE_EXIT_POS[1])
+    print(f"↩ 检测到直播间 Activity: {activity}")
+    print(f"   点击右上角退出直播间: ({x}, {y})")
+    adb_command(["shell", "input", "tap", str(x), str(y)])
+    return True
+
+
 def screenshot():
     result = subprocess.run(["adb", "exec-out", "screencap", "-p"], capture_output=True)
     if result.returncode != 0 or not result.stdout:
@@ -83,6 +128,9 @@ def text_match(recognized: str, target: str) -> bool:
         return False
     if a == b or b in a or a in b:
         return True
+    # 「继续观看」容易被「再看19秒继续解锁」误伤，必须明确出现完整目标词。
+    if b == "继续观看":
+        return False
     if not FUZZY:
         return False
     # 允许个别错字：目标字出现比例够高
@@ -253,40 +301,50 @@ def find_and_click(screen):
 # 点完这些目标后不进入冷却，立刻下一轮识别
 NO_COOLDOWN_TARGETS = {"领取成功"}
 
-print("🚀 汽水音乐自动看广告脚本启动（OCR 文字识别）")
-print(f"   目标: {TARGETS}  置信度>={OCR_SCORE}  轮询={POLL_INTERVAL}s")
-print(f"   点击调试图目录: {DEBUG_DIR}")
-print(f"   无冷却目标: {sorted(NO_COOLDOWN_TARGETS)}")
+def main():
+    print("🚀 汽水音乐自动看广告脚本启动（OCR 文字识别）")
+    print(f"   目标: {TARGETS}  置信度>={OCR_SCORE}  轮询={POLL_INTERVAL}s")
+    print(f"   点击调试图目录: {DEBUG_DIR}")
+    print(f"   无冷却目标: {sorted(NO_COOLDOWN_TARGETS)}")
+    print(f"   直播间自动退出: {ENABLE_LIVE_EXIT}")
 
-while True:
-    try:
-        screen = screenshot()
-        if screen is None:
-            print("⚠️ 截图失败，检查 adb 连接")
-            time.sleep(3)
-            continue
-
-        clicked = find_and_click(screen)
-        if clicked:
-            if clicked in NO_COOLDOWN_TARGETS:
-                print(f"⚡ 「{clicked}」已点，跳过等待，立即继续识别")
+    while True:
+        try:
+            screen = screenshot()
+            if screen is None:
+                print("⚠️ 截图失败，检查 adb 连接")
+                time.sleep(3)
                 continue
-            time.sleep(CLICK_COOLDOWN)
-            continue
 
-        if ENABLE_RANDOM_SWIPE and random.random() < SWIPE_PROB:
-            h, w = screen.shape[:2]
-            x = w // 2
-            y1 = int(h * 0.55)
-            y2 = int(h * 0.40)
-            print(f"↕ 随机上滑 ({x},{y1}) -> ({x},{y2})")
-            adb_command(["shell", "input", "swipe", str(x), str(y1), str(x), str(y2), "350"])
+            if exit_live_room(screen):
+                time.sleep(LIVE_EXIT_COOLDOWN)
+                continue
 
-        time.sleep(POLL_INTERVAL)
+            clicked = find_and_click(screen)
+            if clicked:
+                if clicked in NO_COOLDOWN_TARGETS:
+                    print(f"⚡ 「{clicked}」已点，跳过等待，立即继续识别")
+                    continue
+                time.sleep(CLICK_COOLDOWN)
+                continue
 
-    except KeyboardInterrupt:
-        print("\n已停止")
-        break
-    except Exception as e:
-        print(f"⚠️ 错误: {e}")
-        time.sleep(5)
+            if ENABLE_RANDOM_SWIPE and random.random() < SWIPE_PROB:
+                h, w = screen.shape[:2]
+                x = w // 2
+                y1 = int(h * 0.55)
+                y2 = int(h * 0.40)
+                print(f"↕ 随机上滑 ({x},{y1}) -> ({x},{y2})")
+                adb_command(["shell", "input", "swipe", str(x), str(y1), str(x), str(y2), "350"])
+
+            time.sleep(POLL_INTERVAL)
+
+        except KeyboardInterrupt:
+            print("\n已停止")
+            break
+        except Exception as e:
+            print(f"⚠️ 错误: {e}")
+            time.sleep(5)
+
+
+if __name__ == "__main__":
+    main()
