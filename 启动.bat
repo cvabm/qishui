@@ -12,7 +12,7 @@ where python >nul 2>&1
 if errorlevel 1 (
     where py >nul 2>&1
     if errorlevel 1 (
-        echo [错误] 未找到 Python，请先安装 Python 3.9+ 并勾选 Add to PATH
+        echo [错误] 未找到 Python，请先安装 Python 3.10+ 并勾选 Add to PATH
         pause
         exit /b 1
     )
@@ -34,13 +34,8 @@ echo.
 
 %PY% -c "import cv2, numpy, rapidocr_onnxruntime" >nul 2>&1
 if errorlevel 1 (
-    echo [安装] 缺少依赖，正在 pip install -r requirements.txt ...
-    %PY% -m pip install -r requirements.txt
-    if errorlevel 1 (
-        echo [错误] 依赖安装失败
-        pause
-        exit /b 1
-    )
+    echo [提示] 未安装 OCR 兜底依赖，主通道 uiautomator 仍可正常运行。
+    echo        如需 WebView 广告的兜底识别，执行：pip install -r requirements.txt
     echo.
 )
 

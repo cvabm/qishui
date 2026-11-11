@@ -1,0 +1,9 @@
+debug_clicks/
+__pycache__/
+*.pyc
+*.bak
+
+# 调试截图（不提交）
+*.png
+*.jpg
+*.jpeg
