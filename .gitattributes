@@ -1,0 +1,6 @@
+# 让 .bat/.cmd 始终保持 CRLF，避免 cmd 解析多行 if 块出错
+* text=auto
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.py  text eol=lf
+*.md  text eol=lf
